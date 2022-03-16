@@ -68,6 +68,13 @@ char uart_getc() {
     return r=='\r'?'\n':r;
 }
 
+char uart_getc_nr(){
+    char r;
+    do{asm volatile("nop");}while(!(*AUX_MU_LSR&0x01));
+    r=(char)(*AUX_MU_IO);
+    return r;
+}
+
 /**
  * Display a string
  */
@@ -82,7 +89,8 @@ void uart_puts(char *s) {
 
 void uart_flush()
 {
-	char tmp;
+	char tmp = '1';
+	tmp++;
 	do{tmp = (char)(*AUX_MU_IO);}while(*AUX_MU_LSR&0x01);
 }
 
@@ -115,20 +123,9 @@ void printf(char *fmt, ...) {
     }
 }
 
-int strcmp(char *str1, char *str2)
-{
-	while( (*str1 != '\0' && *str2 != '\0') && *str1 == *str2 )
-	{
-		str1++;
-		str2++;
-	}
-
-	if(*str1 == *str2)
-	{
-		return 0;
-	}
-	else
-	{
-		return *str1 - *str2;
+void uart_write(char *str, int count){
+	for(int i=0; i<count; i++){
+		if(*str == '\n') uart_send('\r');
+		uart_send(*str++);
 	}
 }

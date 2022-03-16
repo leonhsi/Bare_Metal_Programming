@@ -1,9 +1,12 @@
 void uart_init();
 void uart_send(unsigned int c);
 char uart_getc();
+char uart_getc_nr();
 void uart_puts(char *s);
 void uart_flush();
 void uart_hex(unsigned int d);
 void printf(char *fmt, ...);
 int strcmp(char *str1, char *str2);
-
+int memcmp(void *s1, void *s2, int n);
+int strlen(char *str);
+void uart_write(char *str, int count);

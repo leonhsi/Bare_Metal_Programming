@@ -15,6 +15,7 @@ _start:
     // set top of stack just before our code (stack grows to a lower address per AAPCS64)
     ldr     x1, =_start
     mov     sp, x1
+	mov		x10, x0
 
     // clear bss
     ldr     x1, =__bss_start
