@@ -34,6 +34,7 @@ void help()
 	printf("page : \t\tpage <PAGES>, allocates <PAGES> pages\n");
 	printf("free : \t\tfree <ADDR>, free allocated pages at <ADDR>\n");
 	printf("dma : \t\tdma <BYTES>, Dynamic Memory Allocate <BYTES> on page\n");
+	printf("fdma : \t\tfdma <ADDR>, free allocated dynamic memory chunk on <ADDR>\n");
 	printf("\n");
 }
 

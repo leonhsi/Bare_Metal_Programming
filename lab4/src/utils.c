@@ -1,9 +1,17 @@
 #include "uart.h"
+#include "utils.h"
 
-char* malloc_addr = (char*)0x6000000;
+char* malloc_addr_start = (char*)0x6000000;
+char* malloc_addr_end =   (char*)0x7000000;
+char* malloc_addr = 	  (char*)0x6000000;
 
 void* simple_malloc(int size){
 	//printf("\n%x\n", malloc_addr);
+	
+	if(malloc_addr + size > malloc_addr_end){
+		printf("allocate size out of range\n");
+		return "";
+	}
 	void *ptr = malloc_addr;
 	malloc_addr += size;
 
@@ -158,4 +166,14 @@ int allOne(long long n){
 	}
 
 	return 1;
+}
+
+int log(int n){
+	int res = 0;
+	while(n >1){
+		n >>= 1;
+		res++;
+	}
+
+	return res;
 }

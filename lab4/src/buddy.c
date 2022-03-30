@@ -1,39 +1,7 @@
 #include "uart.h"
 #include "utils.h"
 #include "buddy.h"
-
-#define PAGE_MEMORY_BASE    0x10000000
-#define PAGE_MEMORY_END     0x20000000
-#define Page_Size           4096
-#define Page_Number         65536
-
-enum USAGE {Val_A, Val_F, Val_X};
-
-//structure for The Array
-typedef struct{
-    int index;
-    int value;
-    enum USAGE usage;
-    struct list_head page_list;
-}Page;
-
-typedef struct{
-    Page pages[Page_Number];
-}The_Array;
-
-//structure for free frame linked list
-typedef struct{
-    int frame_size;
-    struct list_head header_list;
-}Frame_Header;
-
-typedef struct{
-    Frame_Header frame_header[17];
-}Frame_List;
-
-//global var
-The_Array *the_array;
-Frame_List *frame_list;
+#include "dtb.h"
 
 void init_page_array(){
     the_array = (The_Array *)simple_malloc(sizeof(The_Array));
@@ -76,7 +44,7 @@ void print_list_content(struct list_head *head){
 }
 
 void print_buddy_system(){
-    for(int i=0; i<17; i++){
+    for(int i=0; i<Frame_Index; i++){
         printf("[%d] ", i);
         print_list_content(&(frame_list->frame_header[i].header_list));
     }
@@ -276,27 +244,6 @@ void free_pages(char *ptr){
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");  
 }
 
-typedef struct{
-    int chunk_size;
-    int chunk_num; //number of available chunk
-    int max_chunk;
-    long long chunk_mask; //1 : allocated, 0 : free
-    char *base_addr;
-    struct list_head par_page_list;
-}Par_Page;
-
-typedef struct{
-    Par_Page par_page[Page_Number];
-}Par_Array;
-
-typedef struct{
-    struct list_head par_list_head;
-}Par_List;
-
-//global var
-Par_Array *par_array;
-Par_List *par_list;
-
 void init_dynamic_memory(){
 
     par_array = (Par_Array *)simple_malloc(sizeof(Par_Array));
@@ -441,6 +388,136 @@ void free_dynamic_memory(char *addr){
     printf("\naddress has no dynamic memory page allocated\n");
     return;
 }
+
+//global var for reserve memory
+extern unsigned int cpio_addr;
+extern char* malloc_addr_start;
+extern char* malloc_addr_end;
+
+unsigned int initrd_start;
+unsigned int initrd_end;
+unsigned int malloc_start = (0x6000000);
+unsigned int malloc_end =   (0x7000000);
+unsigned int reserve_mem_start = (0x0);
+unsigned int reserve_mem_end = (0x1000);
+
+unsigned int mem_start = 0x0;
+unsigned int mem_end = 0x3c000000;
+
+void get_initrd_end(char *prop_name, unsigned int addr){
+    if(strcmp(prop_name, "linux,initrd-end") == 0){
+        initrd_end = addr;
+    }
+}
+
+void init_startup_array(){
+    the_array = (The_Array *)simple_malloc(sizeof(The_Array));
+
+    for(int i=0; i<Page_Number; i++){
+        unsigned int cur_addr = i*Page_Size;
+        int num = 0;
+        if(cur_addr == reserve_mem_start){
+            num = (reserve_mem_end - reserve_mem_start) / Page_Size;
+            for(int j=0; j<num; j++){
+                the_array->pages[i+j].usage = Val_X;
+                the_array->pages[i+j].value = -1;
+            }
+        }
+        else if(cur_addr == initrd_start){ 
+            num = (initrd_end - initrd_start) / Page_Size;
+            for(int j=0; j<num; j++){
+                the_array->pages[i+j].usage = Val_X;
+                the_array->pages[i+j].value = -1;
+            }
+        }
+        else if(cur_addr == malloc_start){
+            num = (malloc_end - malloc_start) / Page_Size;
+            for(int j=0; j<num; j++){
+                the_array->pages[i+j].usage = Val_X;
+                the_array->pages[i+j].value = -1;
+            }
+        }
+        else {
+            the_array->pages[i].usage = Val_A;
+            the_array->pages[i].value = 0;
+            
+        }
+
+        the_array->pages[i].index = i;
+        INIT_LIST_HEAD(&(the_array->pages[i].page_list));
+
+        i = (num == 0) ? i : (i+num-1);
+    }
+}
+
+void merge_page(int idx){
+    while(the_array->pages[idx].usage == Val_A){
+        int size = pow(2,the_array->pages[idx].value);
+        int buddy_idx = idx ^ size;
+
+        //whether can merge buddy
+        if( (the_array->pages[buddy_idx].usage != Val_A) || \
+            (the_array->pages[idx].usage != Val_A) || \
+            (the_array->pages[idx].value != the_array->pages[buddy_idx].value)){
+            break;
+        }
+
+        //update the array
+        int big_idx = (idx > buddy_idx) ? idx : buddy_idx;
+        the_array->pages[big_idx].usage = Val_F;
+        the_array->pages[big_idx].value = -1;
+
+        int base_idx = (idx < buddy_idx) ? idx : buddy_idx;
+        the_array->pages[base_idx].value++;
+
+        //update frame list
+        list_del(&(the_array->pages[idx].page_list));
+        list_del(&(the_array->pages[buddy_idx].page_list));
+
+        int order = the_array->pages[base_idx].value;
+        list_add_tail(&(the_array->pages[base_idx].page_list),
+                    &(frame_list->frame_header[order].header_list));
+
+        idx = base_idx;
+    }
+}
+
+
+void init_startup_list(){
+    frame_list = (Frame_List *)simple_malloc(sizeof(Frame_List));
+
+    //init frame list
+    for(int i=0; i<Frame_Index; i++){
+        frame_list->frame_header[i].frame_size = i;
+        INIT_LIST_HEAD(&(frame_list->frame_header[i].header_list));
+    }
+
+    //link init frame node to list
+    for(int i=0; i<Page_Number; i++){
+        if(the_array->pages[i].usage == Val_A){
+            list_add_tail(&(the_array->pages[i].page_list), 
+                        &(frame_list->frame_header[0].header_list));
+        }
+    }
+
+    //recursively merge frame list node
+    for(int i=0; i<Page_Number; i++){
+        merge_page(i);
+    }
+}
+
+
+void startup_allocator(){
+    initrd_start = cpio_addr;
+    parse_dtb(get_initrd_end, "chosen");
+    
+    init_startup_array();   
+    init_startup_list();
+    print_buddy_system();
+}
+
+
+
 
 
 

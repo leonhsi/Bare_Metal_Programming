@@ -30,15 +30,16 @@ int main(int addr, int time)
 	// }
 
 	set_dtb_addr(addr);
-	parse_dtb(get_cpio_addr);
+	parse_dtb(get_initrd_start, "chosen");
  
 	get_boot_time(time);
 	
 	init_timer_queue();
 	init_task_queue();
-	init_page_array();
-	init_frame_list();
-	init_dynamic_memory();
+	//init_page_array();
+	//init_frame_list();
+	//init_dynamic_memory();
+	startup_allocator();
 
 	shell();
 

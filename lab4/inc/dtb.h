@@ -5,4 +5,4 @@
 #define FDT_END         0x00000009
 
 void set_dtb_addr();
-void parse_dtb(void (*)(unsigned int));
+void parse_dtb(void (*)(), char *begin_node_name);

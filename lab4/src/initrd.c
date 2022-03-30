@@ -91,6 +91,11 @@ void parse_cpio_file(){
 
 }
 
-void get_cpio_addr(unsigned int addr){
-	cpio_addr = addr;
+void get_initrd_start(char *prop_name, unsigned int addr){
+	if(strcmp(prop_name, "linux,initrd-start") == 0){
+		//printf("found cpio address : %x\n", addr);
+		cpio_addr = addr;
+	}
+
+	return;
 }

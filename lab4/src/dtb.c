@@ -39,7 +39,9 @@ int big2small(int num){
 	return swapped;
 }
 
-void parse_dtb(void (*get_cpio_addr)(unsigned int)){
+void parse_dtb(void (*call_back_func)(), char *begin_node_name){
+
+	int call_back_flag = 0; //change when under required begin node
 
 	fdt_t* dtb_header = (fdt_t *)dtb_addr;
 
@@ -56,6 +58,10 @@ void parse_dtb(void (*get_cpio_addr)(unsigned int)){
 			fdt_node_header *header = (fdt_node_header *)addr;
 			int begin_len = strlen(header->name);
 
+			if(strcmp(begin_node_name, header->name) == 0){
+				call_back_flag = 1;
+			}
+
 			addr += begin_len + 4;
 
 			if(begin_len % 4 != 0){
@@ -66,22 +72,31 @@ void parse_dtb(void (*get_cpio_addr)(unsigned int)){
 			fdt_property *prop = (fdt_property *)addr;
 			int prop_len = big2small(prop->len);	
 
-
 			char *string_addr = (char *)(dtb_addr + string_offset + big2small(prop->nameoff));
-			
-			if(!strcmp(string_addr, "linux,initrd-start")){
-				unsigned int cpio_addr = big2small(*(unsigned int *)(addr + 12));
-				(get_cpio_addr)(cpio_addr);
+			unsigned int call_back_addr = big2small(*(unsigned int *)(addr + 12));
 
-				/*
-				int tmp = 0;
-				while(tmp < prop_len){
-					printf("%c", *(addr+12+tmp));
-					tmp++;
-				}
-				printf("\n");
-				*/
+			if(call_back_flag){
+				// if(strcmp(string_addr, "reg") == 0){
+				// 	printf("prop data : %x\n", call_back_addr);
+				// }
+				//printf("prop data : %x\n", call_back_addr);
+				//printf("prop name : %s\n", string_addr);
+				(call_back_func)(string_addr, call_back_addr);
 			}
+
+			// if(!strcmp(string_addr, "linux,initrd-start")){
+			// 	unsigned int cpio_addr = big2small(*(unsigned int *)(addr + 12));
+			// 	(get_cpio_addr)(cpio_addr);
+
+			// 	/*
+			// 	int tmp = 0;
+			// 	while(tmp < prop_len){
+			// 		printf("%c", *(addr+12+tmp));
+			// 		tmp++;
+			// 	}
+			// 	printf("\n");
+			// 	*/
+			// }
 
 			addr += prop_len + 12;
 			if(prop_len % 4 != 0){
