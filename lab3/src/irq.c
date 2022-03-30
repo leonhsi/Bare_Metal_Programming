@@ -82,11 +82,11 @@ void process_task(bool preempt){
 
 void irq_handler(){
 
-    // //store return address to vector table
-    // register unsigned int return_addr;
-    // asm volatile("mov %0, lr\n" 
-    //             : "=r"(return_addr) 
-    //             : );
+    //store return address to vector table
+    register unsigned int return_addr;
+    asm volatile("mov %0, lr\n" 
+                : "=r"(return_addr) 
+                : );
 
     //timer interrupt
     register unsigned int irq_source;
@@ -101,9 +101,9 @@ void irq_handler(){
         //enqueue_task(0, 0);
     }
 
-    // asm volatile("mov lr, %0" 
-    //             : 
-    //             : "r"(return_addr));
+    asm volatile("mov lr, %0" 
+                : 
+                : "r"(return_addr));
 }
 
 extern Queue *user_r_queue;

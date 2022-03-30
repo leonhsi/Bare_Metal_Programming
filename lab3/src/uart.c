@@ -19,23 +19,24 @@ void uart_enable_ir()
 }
 
 void uart_disable_ir(){
-    *AUX_MU_IER &= 0xc;     //1100
+    *AUX_MU_IER &= ~(3);     
 }
 
 void uart_enable_tx_ir(){
-    *AUX_MU_IER |= 0xfe;    //1111 1110
+    //*AUX_MU_IER |= 0xfe;    //1111 1110
+    *AUX_MU_IER |= (1 << 1);
 }
 
 void uart_enable_rx_ir(){
-    *AUX_MU_IER |= 0xfd;    //1111 1101
+    *AUX_MU_IER |= 1;    //1111 1101
 }
 
 void uart_disable_tx_ir(){
-    *AUX_MU_IER &= 0xd;     //1101
+    *AUX_MU_IER &= ~(1<<1);     //1101
 }
 
 void uart_disable_rx_ir(){
-    *AUX_MU_IER &= 0xe;     //1110
+    *AUX_MU_IER &= ~(1);     //1110
 }
 
 void uart_send_async(char c){

@@ -91,11 +91,11 @@ exception_vector_table:
 	b     exception_handler
   .align 7
 	//IRQ
-  msr   daifset, 0xf    //disable interrupt
-  //save_all
+  //msr   daifset, 0xf    //disable interrupt
+  save_all
   bl    irq_handler
-  //load_all
-  msr   daifclr, 0xf
+  load_all
+  //msr   daifclr, 0xf
   eret
   .align 7
 	//FIQ
@@ -158,9 +158,13 @@ _uart_irq:
   mrs   x2, elr_el1
   mrs   x3, spsr_el1
   mrs   x4, far_el1
+  //store lr
+  mov   x28, lr
   //bl    exception_log
   bl    uart_irq_handler
+  mov   lr, x28
   ret
+  //ret
 
 .global _timeout_handler
 _timeout_handler:

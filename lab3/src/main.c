@@ -13,7 +13,7 @@ int main(int addr, int time)
 	uart_init();
 	uart_flush();
 
-	// printf("\nWelcom to Raspberry pi 3\n");
+	printf("\nWelcom to Raspberry pi 3\n");
 
 	// uart_enable_ir_init();
 

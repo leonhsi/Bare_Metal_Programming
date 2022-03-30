@@ -43,13 +43,16 @@ void reboot()
 }
 
 void set_timer_interface(char * cmd){
-	//printf("\n%s\n", cmd);
-
 	int index = 5;
-	char *message = "";
-	strclear(message);
+	int mesg_len = 0;
+	while(cmd[index] != ' '){
+		mesg_len++;
+		index++;
+	}
+	char *message = (char *)simple_malloc(mesg_len);
+	//strclear(message);
 	//printf("%s\n", message);
-
+	index = 5;
 	while(cmd[index] != ' '){
 		message[index-5] = cmd[index];
 		//printf("%c %c\n", message[index-5], cmd[index]);
@@ -65,7 +68,7 @@ void set_timer_interface(char * cmd){
 		++index;
 	}
 
-	//printf("message : %s\n", message);
+	//printf("\nmessage : %s\n", message);
 	//printf("sec : %d \n", sec);
 
 	setTimeout(message, sec);
