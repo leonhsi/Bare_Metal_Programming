@@ -104,12 +104,12 @@ void schedule(long long init_lr){
             //printf("addr : %x\n", t);
             list_move_tail(&t->t_list, &run_queue->h_list);
             next_context = (long long)(&(t->context));
-            if(pre_context == next_context){
-                //printf("same!!");
-                asm volatile("mov lr, %0" : : "r"(t->context.lr));
-                asm volatile("mov sp, %0" : : "r"(t->context.sp));
-                asm volatile("ret");
-            }
+            // if(pre_context == next_context){
+            //     //printf("same!!");
+            //     asm volatile("mov lr, %0" : : "r"(t->context.lr));
+            //     asm volatile("mov sp, %0" : : "r"(t->context.sp));
+            //     asm volatile("ret");
+            // }
             break;
         }
         // else if(t->status == DEAD){
@@ -128,8 +128,11 @@ void schedule(long long init_lr){
     
     //print_list();
     //printf("====\n");
+    //printf("\ncur pid 1: %d\n", get_pid());
 
     _switch_to(pre_context, next_context); 
+    //printf("\ncur pid 2: %d\n", get_pid());
+
 }
 
 void idle(long long init_lr){

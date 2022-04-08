@@ -9,7 +9,7 @@ int mbox_call(unsigned char ch, unsigned int *mbox);
 void __get_pid(int sp);
 void __uartwrite(long long buf_addr, long long size, long long cur_ksp);
 void __uartread(long long buf_addr, long long size, long long cur_ksp);
-void __exec(int cur_ksp, long long img_cpio_addr, long long img_len);
+void __exec(int cur_ksp, long long img_name_addr);
 void __fork(int cur_ksp, int svc_lr);
 void __exit(int svc_lr);
 void __mailbox_call(long long cur_ksp, long long ch, int* mbox);

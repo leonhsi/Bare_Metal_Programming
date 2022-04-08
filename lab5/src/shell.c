@@ -10,6 +10,7 @@
 #include "buddy.h"
 #include "thread.h"
 #include "syscall.h"
+#include "shell.h"
 
 extern void _user();
 extern void _from_el1_to_el0();
@@ -208,6 +209,13 @@ void test_uart(){
 	printf("\n====== %s\n", read);
 }
 
+void exec_interface(){
+
+	if(fork() == 0){
+		exec("syscall.img");
+	}
+}
+
 void command_not_found(char *cmd)
 {
 	printf("\nCommand not found : %s\n", cmd);
@@ -348,7 +356,7 @@ void shell()
 		else if( strcmp(cmd, "thread") == 0)	create_thread_interface();
 		else if( strncmp(cmd, "svc", 3) == 0)	system_call_interface(cmd);
 		else if( strcmp(cmd, "fork") == 0)		fork_test_interface();
-		else if( strcmp(cmd, "exec") == 0)		exec("syscall.img"); 
+		else if( strcmp(cmd, "exec") == 0)		exec_interface();
 		else if( strcmp(cmd, "ttt") == 0)		test_uart();
 		else									command_not_found(cmd);
 	}

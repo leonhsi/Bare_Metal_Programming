@@ -43,12 +43,12 @@ long long uartwrite(const char buf[], long long size){
 
 //int exec(char *name, char *const argv[]){
 int exec(char *name){
-    char *img_addr = get_cpio_file(name);
-    int img_len = get_cpio_file_len(name);
+
     //printf("exec img addr : %x\n", img_addr);
 
-    asm volatile("mov x9, %0" : : "r"(img_addr));
-    asm volatile("mov x10, %0" : : "r"(img_len));
+    // asm volatile("mov x9, %0" : : "r"(img_addr));
+    // asm volatile("mov x10, %0" : : "r"(img_len));
+    asm volatile("mov x0, %0" : : "r"(name));
     asm volatile("mov x8, #3");
     asm volatile("svc #0");
  
@@ -96,11 +96,15 @@ void __get_pid(int sp){
 }
 
 void __uartread(long long buf_addr, long long size, long long cur_ksp){
+
     char *buf = (char *)buf_addr;
+
+    asm volatile("msr DAIFClr, 0xf");
     for(int i=0; i<size; i++){
         *buf = uart_getc();
         buf++;
     }
+    asm volatile("msr DAIFSet, 0xf");
 
     //write trap frame
     asm volatile("mov x2, %0" : : "r"(cur_ksp));
@@ -110,7 +114,9 @@ void __uartread(long long buf_addr, long long size, long long cur_ksp){
 
 void __uartwrite(long long buf_addr, long long size, long long cur_ksp){
     char *buf = (char *)buf_addr;
+    asm volatile("msr DAIFClr, 0xf");
     uart_write(buf, size);
+    asm volatile("msr DAIFSet, 0xf");
 
     //write trap frame
     asm volatile("mov x2, %0" : : "r"(cur_ksp));
@@ -118,23 +124,27 @@ void __uartwrite(long long buf_addr, long long size, long long cur_ksp){
     asm volatile("str x1, [x2, 16 * 0]");
 }
 
-void __exec(int cur_ksp, long long img_cpio_addr, long long img_len){
-    //printf("exec! addr : %x\n", img_cpio_addr);
+void __exec(int cur_ksp, long long img_name_addr){
+    char *filename = (char *)img_name_addr;
+    char *img_cpio_addr = get_cpio_file(filename);
+    long long img_len = get_cpio_file_len(filename);
 
-    char *img_addr = alloc_page(100);
+    printf("\nfile %s\n", filename);
+
+    char *img_addr = alloc_page(img_len / Page_Size + 1);
     char *img_addr_tmp = img_addr;
-    char *img_cpio = (char *)img_cpio_addr;
+    char *img_cpio_tmp = (char *)img_cpio_addr;
 
     for(int i=0; i<img_len; i++){
-        *img_addr_tmp = *img_cpio;
+        *img_addr_tmp = *img_cpio_tmp;
         img_addr_tmp++;
-        img_cpio++;
+        img_cpio_tmp++;
     }
 
     //write trap frame, set elr to img addr
     asm volatile("mov x1, %0" : : "r"(cur_ksp));
     asm volatile("mrs x2, spsr_el1");
-    asm volatile("mov x3, %0" : : "r"((long long)img_addr));
+    asm volatile("mov x3, %0" : : "r"((long long)img_addr));    //elr
     asm volatile("stp x2, x3, [x1, 16 * 16]");
 
     //return;
@@ -252,24 +262,23 @@ void __mbox_call(long long cur_ksp, long long ch, int* mbox){
 
 void system_call_handler(int esr_el1, int cur_ksp, int svc_lr){
 
-    long long img_addr;
-    long long ch;
-    long long mbox_addr;
-    long long buf_addr;
-    long long size;
-    long long img_len;
-
     int svc_no = esr_el1 & 0xF;
     int sys_no;
     asm volatile("mov %0, x8" : "=r"(sys_no));
 
-    if( ((esr_el1 >> 26) & (0b111111)) != (0b010101)){
-        printf("fuck you\n");
-        return;
-    }
-    else{
-        printf("hi\n");
-    }
+    long long img_name_addr;
+    long long ch;
+    long long mbox_addr;
+    long long buf_addr;
+    long long size;
+
+    // if( ((esr_el1 >> 26) & (0b111111)) != (0b010101)){
+    //     printf("fuck you\n");
+    //     return;
+    // }
+    // else{
+    //     printf("hi\n");
+    // }
 
     if(svc_no == 0){
         switch(sys_no){
@@ -279,18 +288,20 @@ void system_call_handler(int esr_el1, int cur_ksp, int svc_lr){
             case 1:
                 //load arg from trap frame
                 asm volatile("mov x1, %0" : : "r"(cur_ksp));
-                asm volatile("ldp %0, %1, [x1, 0]" : "=r"(buf_addr), "=r"(size));
+                asm volatile("ldp %0, %1, [x1, 16 * 0]" : "=r"(buf_addr), "=r"(size));
                 __uartread(buf_addr, size, cur_ksp);
                 break;
             case 2:
                 asm volatile("mov x1, %0" : : "r"(cur_ksp));
-                asm volatile("ldp %0, %1, [x1, 0]" : "=r"(buf_addr), "=r"(size));
+                asm volatile("ldp %0, %1, [x1, 16 * 0]" : "=r"(buf_addr), "=r"(size));
                 __uartwrite(buf_addr, size, cur_ksp);
                 break;
             case 3:
-                asm volatile("mov %0, x9" : "=r"(img_addr));
-                asm volatile("mov %0, x10" : "=r"(img_len));
-                __exec(cur_ksp, img_addr, img_len);
+                //asm volatile("mov %0, x9" : "=r"(img_addr));
+                //asm volatile("mov %0, x107" : "=r"(img_len));
+                asm volatile("mov x1, %0" : : "r"(cur_ksp));
+                asm volatile("ldr %0, [x1, 16 * 0]" : "=r"(img_name_addr));
+                __exec(cur_ksp, img_name_addr);
                 break;
             case 4:
                 __fork(cur_ksp, svc_lr);
@@ -299,8 +310,10 @@ void system_call_handler(int esr_el1, int cur_ksp, int svc_lr){
                 __exit(svc_lr);
                 break;
             case 6:
-                asm volatile("mov %0, x9" : "=r"(ch));
-                asm volatile("mov %0, x10" : "=r"(mbox_addr));
+                //asm volatile("mov %0, x9" : "=r"(ch));
+                //asm volatile("mov %0, x10" : "=r"(mbox_addr));
+                asm volatile("mov x1, %0" : : "r"(cur_ksp));
+                asm volatile("ldp %0, %1, [x1, 16 * 0]" : "=r"(ch), "=r"(mbox_addr));
                 __mbox_call(cur_ksp, ch, (int *)mbox_addr);
                 break;
             default:
