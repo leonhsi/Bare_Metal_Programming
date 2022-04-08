@@ -1,23 +1,6 @@
-#include "gpio.h"
 #include "mbox.h"
 #include "uart.h"
-
-#define MBOX_BASE  (MMIO_BASE+0x0000B880)
-#define MBOX_READ       ((volatile unsigned int*)(MBOX_BASE+0x0))
-#define MBOX_STATUS     ((volatile unsigned int*)(MBOX_BASE+0x18))
-#define MBOX_WRITE      ((volatile unsigned int*)(MBOX_BASE+0x20))
-#define MBOX_RESPONSE   0x80000000
-#define MBOX_FULL       0x80000000
-#define MBOX_EMPTY      0x40000000
-
-#define REQUEST_CODE        0x00000000
-#define REQUEST_SUCCEED     0x80000000
-#define REQUEST_FAILED      0x80000001
-#define TAG_REQUEST_CODE    0x00000000
-#define END_TAG             0x00000000
-
-#define GET_BOARD_REVISION  0x00010002
-#define GET_ARM_MEMORY		0x00010005
+#include "syscall.h"
 
 /* mailbox message buffer */
 volatile unsigned int  __attribute__((aligned(16))) mbox[36];
@@ -25,7 +8,7 @@ volatile unsigned int  __attribute__((aligned(16))) mbox[36];
 /**
  * Make a mailbox call. Returns 0 on failure, non-zero on success
  */
-int mbox_call(unsigned char ch)
+int mmbox_call(unsigned char ch)
 {
     unsigned int r = (((unsigned int)((unsigned long)&mbox)&~0xF) | (ch&0xF));
     /* wait until we can write to the mailbox */
@@ -46,6 +29,7 @@ int mbox_call(unsigned char ch)
 
 void get_board_revision()
 {
+	//volatile unsigned int  __attribute__((aligned(16))) mbox[36];
 	mbox[0] = 7 * 4;					//buffer size in bytes
 	mbox[1] = REQUEST_CODE;
 	
@@ -58,12 +42,13 @@ void get_board_revision()
 	//tags end
 	mbox[6] = END_TAG;
 
-	mbox_call(MBOX_CH_PROP);
+	mbox_call(MBOX_CH_PROP, mbox);
 	printf("\nBoard revision : \t\t0x%x\n", mbox[5]);
 }
 
 void get_arm_memory()
 {
+	//volatile unsigned int  __attribute__((aligned(16))) mbox[36];
 	mbox[0] = 8 * 4;					//buffer size in bytes
 	mbox[1] = REQUEST_CODE;
 	
@@ -77,7 +62,8 @@ void get_arm_memory()
 	//tags end
 	mbox[7] = END_TAG;
 
-	mbox_call(MBOX_CH_PROP);
+	mbox_call(MBOX_CH_PROP, mbox);
+	//mmbox_call(MBOX_CH_PROP);
 	printf("\nARM memory base address : \t0x%x\n", mbox[5]);
 	printf("ARM memory size : \t\t0x%x\n", mbox[6]);
 }

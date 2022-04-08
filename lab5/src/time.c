@@ -43,11 +43,8 @@ void enqueue_timer(char *message, int sec){
 }
 
 void pop_timer(){
-    //Timer t = timer_q->timer[timer_q->front];
     timer_queue->front = (timer_queue->front + 1) % timer_capacity;
     timer_queue->size--;
-
-    //return t;    
 }
 
 void insert_timer(){

@@ -51,7 +51,7 @@ void print_buddy_system(){
 }
 
 char *alloc_page(unsigned int size){
-    printf("\nallocating [%d] pages\n\n", size);
+    //printf("\nallocating [%d] pages\n\n", size);
 
     int target_frame_index = 0;
     while(size > 1){
@@ -68,14 +68,14 @@ char *alloc_page(unsigned int size){
     }
 
     if(empty_frame_index <= 16){
-        printf("found available frame at frame list index [%d]\n\n", empty_frame_index);
+        //printf("found available frame at frame list index [%d]\n\n", empty_frame_index);
     }
     else{
         printf("can't not allocate pages, page number out of range\n\n");
         return "";
     }
 
-    printf("allocating pages.....\n");
+    //printf("allocating pages.....\n");
     //printf("=============================================\n");
 
     int idx = -1;
@@ -109,6 +109,7 @@ char *alloc_page(unsigned int size){
         int new_buddy_index = idx + pow(2, val-1);
         if(the_array->pages[new_buddy_index].usage == Val_X){
             printf("\n\tcan not allocate pages at index %d with value %d\n", new_buddy_index, the_array->pages[new_buddy_index].value);
+            return "";
         }
         else{
             the_array->pages[new_buddy_index].value = val - 1;
@@ -144,18 +145,18 @@ char *alloc_page(unsigned int size){
     }
 
     //print final info
-    printf("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-    printf("final buddy system : \n");
-    print_buddy_system();
-    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+    //printf("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+    //printf("final buddy system : \n");
+    //print_buddy_system();
+    //printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 
-    printf("\nallocated page : \n");
-    printf("index [%d] with value [%d]\n\n", target_index, target_value);
+    //printf("\nallocated page : \n");
+    //printf("index [%d] with value [%d]\n\n", target_index, target_value);
     
     unsigned long long offset = target_index * Page_Size;
-    printf("offset : %x\n\n", offset);
+    //printf("offset : %x\n\n", offset);
     char *page_ptr = ((char *)PAGE_MEMORY_BASE + offset);
-    printf("page allocated at %x, size %d\n", page_ptr, pow(2, target_value));
+    //printf("page allocated at %x, size %d\n", page_ptr, pow(2, target_value));
 
     return page_ptr;
 }
@@ -164,7 +165,7 @@ void free_pages(char *ptr){
 
     //retirrve the pointed address's index and order
     int idx = (int)((double)(hex2dec(ptr,8) - PAGE_MEMORY_BASE) / Page_Size);
-    printf("\nreturned page index in The Array : %d\n", idx);
+    //printf("\nreturned page index in The Array : %d\n", idx);
 
     int order = -1;
     if(the_array->pages[idx].usage == Val_X){
@@ -184,19 +185,19 @@ void free_pages(char *ptr){
         the_array->pages[idx+i].usage = (i==0) ? Val_A : Val_F;
     }
 
-    printf("\nbuddy system after page returned : \n");
-    print_buddy_system();
+    //printf("\nbuddy system after page returned : \n");
+    //print_buddy_system();
 
-    printf("=============================================\n");
+    //printf("=============================================\n");
 
     int cnt = 1;
     while(1){
 
         //find buddies
         int buddy_idx = idx ^ pow(2,order);
-        printf("\nindex : %d\n", idx);
-        printf("\nbuddy index : %d\n", buddy_idx);
-        printf("\norder of this index : %d\n", order);
+        //printf("\nindex : %d\n", idx);
+        //printf("\nbuddy index : %d\n", buddy_idx);
+        //printf("\norder of this index : %d\n", order);
 
         int can_merge = 0;
         struct list_head *pos;
@@ -223,25 +224,25 @@ void free_pages(char *ptr){
             //merge to a new node on the frame list
             list_add_tail(&(the_array->pages[base_idx].page_list), &(frame_list->frame_header[order+1].header_list)); 
 
-            printf("\nbuddy system after %dth merged : \n", cnt);
-            print_buddy_system();
+            //printf("\nbuddy system after %dth merged : \n", cnt);
+            //print_buddy_system();
         }
         else{
-            printf("=============================================\n");
+            //printf("=============================================\n");
             break;
         }
 
         order++;
         cnt++;
 
-        printf("=============================================\n");
+        //printf("=============================================\n");
     }
 
-    printf("\npage reutrned finish\n"); 
-    printf("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-    printf("final buddy system : \n");
-    print_buddy_system();
-    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");  
+    // printf("\npage reutrned finish\n"); 
+    // printf("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+    // printf("final buddy system : \n");
+    // print_buddy_system();
+    // printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");  
 }
 
 void init_dynamic_memory(){

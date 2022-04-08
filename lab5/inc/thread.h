@@ -9,6 +9,14 @@ typedef struct{
 }Context;
 
 typedef struct{
+    int sp_usr;
+    int lr_usr;
+    int sp_svc;
+    int lr_svc;
+    int spsr;
+}Trap_Frame;
+
+typedef struct{
     Context context;
     int tid;
     enum T_STATUS status;
@@ -27,11 +35,9 @@ typedef struct{
 Run_Queue *run_queue;
 
 void init_run_queue();
-void add_run_queue(Thread *t);
-void pop_run_queue();
-void process_run_queue();
-void create_thread(void (*task)());
+void print_list();
+Thread* create_thread(void (*task)());
 void schedule();
-void exit(Thread *thread);
 void idle();
 void foo();
+void fork_test();

@@ -3,10 +3,13 @@
 #include "irq.h"
 #include "queue.h"
 #include "gpio.h"
+#include "thread.h"
 
 #define Task_Capacity 10
 
-extern void _timeout_handler();
+extern void _timeout_message_handler();
+extern void _core_timer_enable();
+extern void _set_core_timer();
 extern void _uart_irq();
 
 typedef struct{
@@ -62,7 +65,7 @@ void process_task(bool preempt){
             _uart_irq();
         }
         else if(task.type == 1){
-            _timeout_handler();
+            _timeout_message_handler();
         }
         pop_task();
     }
@@ -72,7 +75,7 @@ void process_task(bool preempt){
                 _uart_irq();
             }
             else if(task.type == 1){
-                _timeout_handler();
+                _timeout_message_handler();
             }
 
             pop_task();         
@@ -80,7 +83,7 @@ void process_task(bool preempt){
     }
 } 
 
-void irq_handler(){
+void irq_handler(int irq_lr){
 
     // //store return address to vector table
     // register unsigned int return_addr;
@@ -93,7 +96,11 @@ void irq_handler(){
     irq_source = *INTERRUPT_SOURCE;
 
     if ( irq_source & (1<<1) ){     //physical timer interrupt
-        _timeout_handler();
+        //_timeout_message_handler();
+        //printf("\ntime\n");
+        _set_core_timer();
+        schedule(irq_lr);
+
         //enqueue_task(1, 0);
     }
     else if( irq_source & (1<<8) ){ //uart (GPU) interrupt
@@ -104,6 +111,7 @@ void irq_handler(){
     // asm volatile("mov lr, %0" 
     //             : 
     //             : "r"(return_addr));
+    return;
 }
 
 extern Queue *user_r_queue;

@@ -9,6 +9,7 @@
 #include "time.h"
 #include "buddy.h"
 #include "thread.h"
+#include "syscall.h"
 
 extern void _user();
 extern void _from_el1_to_el0();
@@ -30,7 +31,7 @@ void help()
 	printf("cat : \t\tshow cpio file content\n");
 	printf("cel : \t\tshow current exception level, cannot work at el0 since system register\n");
 	printf("sel0 : \t\tswitch from el1 to el0, and set timeout 2 sec later\n");
-	printf("svc : \t\tsystem call to print spsr_el1, elr_el1, esr_el1 and far_el1\n");
+	printf("user : \t\tsystem call to print spsr_el1, elr_el1, esr_el1 and far_el1 for five times\n");
 	printf("time : \t\ttime <MESG> <SEC>, set time out after <SEC> and print <MESG>\n");
 	printf("page : \t\tpage <PAGES>, allocates <PAGES> pages\n");
 	printf("free : \t\tfree <ADDR>, free allocated pages at <ADDR>\n");
@@ -172,6 +173,41 @@ void create_thread_interface(){
 	idle();
 }
 
+void system_call_interface(char *cmd){
+	int index = 4;
+	int sys_no = cmd[index] - '0';
+
+	switch(sys_no){
+		case 0:
+			asm volatile("svc #0");
+			break;
+		case 1:
+			//printf("\n111\n");
+			asm volatile("svc #1");
+			break;
+		case 2:
+			asm volatile("svc #2");
+			break;
+		default:
+			printf("\nNo.%d system call not implemented\n", sys_no);
+			break;
+	}
+}
+
+void fork_test_interface(){
+	//run_queue->init_thread.task = (fork_test);
+	fork_test();
+}
+
+void test_uart(){
+	char *wr = "helloooooooooo\n";
+	uartwrite(wr, 5);
+
+	char *read = "";
+	uartread(read, 3);
+	printf("\n====== %s\n", read);
+}
+
 void command_not_found(char *cmd)
 {
 	printf("\nCommand not found : %s\n", cmd);
@@ -303,13 +339,17 @@ void shell()
 		else if( strcmp(cmd, "cat") == 0)		parse_cpio_file();
 		else if( strcmp(cmd, "cel") == 0)		get_current_el();
 		else if( strcmp(cmd, "sel0") == 0 )		_from_el1_to_el0();
-		else if( strcmp(cmd, "svc") == 0 )		_user();
+		else if( strcmp(cmd, "user") == 0 )		_user();
 		else if( strncmp(cmd, "time", 4) == 0)	set_timer_interface(cmd);
 		else if( strncmp(cmd, "page", 4) == 0)	alloc_page_interface(cmd);
 		else if( strncmp(cmd, "free", 4) == 0)	free_page_interface(cmd);
 		else if( strncmp(cmd, "dma", 3) == 0)	dynamic_memory_alloc_interface(cmd);
 		else if( strncmp(cmd, "fdma", 4) == 0)	free_dynamic_memory_interface(cmd);
 		else if( strcmp(cmd, "thread") == 0)	create_thread_interface();
+		else if( strncmp(cmd, "svc", 3) == 0)	system_call_interface(cmd);
+		else if( strcmp(cmd, "fork") == 0)		fork_test_interface();
+		else if( strcmp(cmd, "exec") == 0)		exec("syscall.img"); 
+		else if( strcmp(cmd, "ttt") == 0)		test_uart();
 		else									command_not_found(cmd);
 	}
 }
