@@ -11,6 +11,7 @@ extern void _switch_to_bottom();
 extern int _get_current_context();
 extern void _ret_shell();
 extern void _core_timer_enable();
+extern void _switch_to_top();
 
 void init_run_queue(){
     run_queue = (Run_Queue *)simple_malloc(sizeof(Run_Queue));
@@ -53,6 +54,14 @@ Thread* create_thread(void (*task)()){
 
     //add new thread to run queue
     list_add_tail(&(t->t_list), &(run_queue->h_list));
+
+    //set signal flag to 0
+    for(int i=0; i<10; i++){
+        t->sig_types[i] = 0;
+    }
+
+    //signal handler
+    t->default_sighands[SIGKILL] = default_handler_kill;
 
     //printf("\n====create : \n");
     //print_list();
@@ -98,9 +107,9 @@ void schedule(long long init_lr){
     list_for_each(pos, &run_queue->h_list){
         Thread *t = container_of(pos, Thread, t_list);
 
+         //printf("lr : %x\n", t->context.lr);
         if(t->status == RUN){
-            //printf("tid %d is runnable, switch to this thread\n", t->tid);
-            //printf("lr : %x\n", t->context.lr);
+            printf("tid %d is runnable, switch to this thread\n", t->tid);
             //printf("addr : %x\n", t);
             list_move_tail(&t->t_list, &run_queue->h_list);
             next_context = (long long)(&(t->context));
@@ -132,7 +141,25 @@ void schedule(long long init_lr){
 
     _switch_to(pre_context, next_context); 
     //printf("\ncur pid 2: %d\n", get_pid());
+    check_signal();
+}
 
+void check_signal(){
+    struct list_head *pos;
+
+    list_for_each(pos, &run_queue->h_list){
+        Thread *t = container_of(pos, Thread, t_list);
+        switch(t->sig_types[SIGKILL]){
+            case 1:
+                (t->default_sighands[SIGKILL])(t, SIGKILL);
+                break;
+            case 2:
+                register_handler_kill(t, SIGKILL);
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 void idle(long long init_lr){
@@ -182,10 +209,9 @@ void fork_test(){
         printf("first child pid: %d, cnt: %d, ptr: %x, sp : %x\n", get_pid(), cnt, &cnt, cur_sp);
         ++cnt;
         
-
         if ((ret = fork()) != 0){
             asm volatile("mov %0, sp" : "=r"(cur_sp));
-            printf("first child pid: %d, cnt: %d, ptr: %x, sp : %x\n", get_pid(), cnt, &cnt, cur_sp);
+            printf("first child pid after fork: %d, cnt: %d, ptr: %x, sp : %x\n", get_pid(), cnt, &cnt, cur_sp);
         }
         else{
             while (cnt < 5) {
@@ -195,17 +221,52 @@ void fork_test(){
                 ++cnt;
             }
         }
-
-        // fork();
-        // while (cnt < 5) {
-        //     printf("second child pid: %d, cnt: %d, ptr: %x\n", get_pid(), cnt, &cnt);
-        //     delay(1000000);
-        //     ++cnt;
-        // }
-
         exit();
     } 
     else {
         printf("parent here, pid %d, child %d\n", get_pid(), ret);
     }
+}
+
+void default_handler_kill(Thread *this, long long SIGTYPE){
+    printf("\ndefualt handler kill pid : %d\n", this->tid);
+    this->status = DEAD;
+    this->sig_types[SIGTYPE] = 0;
+    return;
+}
+
+void register_handler_kill(Thread *this, long long SIGTYPE){
+    //store lr to go back to check signal
+    long long cur_lr;
+    asm volatile("mov %0, lr" : "=r"(cur_lr));
+
+    printf("\nregister handler kill pid : %d\n", this->tid);
+    this->sig_types[SIGTYPE] = 0;
+
+    //acquire new user stack, set sp_el0
+    char *new_usp = alloc_page(1);
+    asm volatile("msr sp_el0, %0" : : "r"((long long)new_usp));
+
+    //set elr_el1 to register handler, spsr_el1 = 0
+    asm volatile("msr elr_el1, %0" : : "r"((long long)this->register_sighands[SIGTYPE]));
+    asm volatile("mov x1, 0x0");
+    asm volatile("msr spsr_el1, x1");
+
+    //store cur context
+    long long cur_context = _get_current_context();
+    _switch_to_top(cur_context);
+    asm volatile("stp fp, %0, [%1, 16 * 5]" : : "r"(cur_lr), "r"(cur_context));
+
+    //set lr to sigreturn()
+    asm volatile("mov lr, %0" : : "r"((long long)sigreturn));
+
+    //eret
+    asm volatile("eret");
+
+    printf("hohoho\n");
+}
+
+//register handler
+void say_hi(){
+    printf("\nhiiiiiiiiiiiiiiiiiiiiiiiiiiiii\n");
 }

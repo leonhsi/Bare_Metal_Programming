@@ -8,6 +8,7 @@
 #include "syscall.h"
 
 extern int _get_current_context();
+extern void _switch_to_bottom();
 
 //user
 int get_pid(){
@@ -71,7 +72,7 @@ void exit(){
     asm volatile("svc #0");
 }
 
-int mbox_call(unsigned char ch, unsigned int *mbox){
+int mbox_call(unsigned char ch, volatile unsigned int *mbox){
     asm volatile("mov x9, %0" : : "r"(ch));
     asm volatile("mov x10, %0" : : "r"(mbox));
     asm volatile("mov x8, #6");
@@ -80,6 +81,26 @@ int mbox_call(unsigned char ch, unsigned int *mbox){
     long long ret;
     asm volatile("mov %0, x0" : "=r"(ret));
     return ret;
+}
+
+void kill(int pid, int SIGTYPE){
+    printf("killing \n");
+    asm volatile("mov x1, %0" : : "r"(SIGTYPE));
+    asm volatile("mov x0, %0" : : "r"(pid));
+    asm volatile("mov x8, #7");
+    asm volatile("svc #0");
+}
+
+void signal(long long SIGTYPE, void *register_handler){
+    asm volatile("mov x1, %0" : : "r"(register_handler));
+    asm volatile("mov x0, %0" : : "r"(SIGTYPE));
+    asm volatile("mov x8, #8");
+    asm volatile("svc #0");
+}
+
+void sigreturn(){
+    asm volatile("mov x8, #9");
+    asm volatile("svc #0");
 }
 
 //kernel
@@ -114,6 +135,7 @@ void __uartread(long long buf_addr, long long size, long long cur_ksp){
 
 void __uartwrite(long long buf_addr, long long size, long long cur_ksp){
     char *buf = (char *)buf_addr;
+    
     asm volatile("msr DAIFClr, 0xf");
     uart_write(buf, size);
     asm volatile("msr DAIFSet, 0xf");
@@ -259,6 +281,38 @@ void __mbox_call(long long cur_ksp, long long ch, int* mbox){
     asm volatile("str x2, [x1, 16 * 0]");
 }
 
+void __kill(int pid, long long SIGTYPE){
+    printf("\npid : %d will be killed, SIGTYPE : %d\n", pid, SIGTYPE);
+    struct list_head *pos;
+    list_for_each(pos, &run_queue->h_list){
+        Thread *t = container_of(pos, Thread, t_list);
+        if(t->tid == pid){
+            printf("die bitch\n");
+            t->sig_types[SIGTYPE] = 1;
+            break;
+        }
+    }
+}
+
+void __signal(long long SIGTYPE, void (*register_handler)()){
+    printf("\nSIGTYPE : %d\n", SIGTYPE);
+    (register_handler)();
+    long long cur_context = _get_current_context();
+    Thread *cur_thread = (Thread *)cur_context;
+    cur_thread->register_sighands[SIGTYPE] = register_handler;
+    cur_thread->sig_types[SIGTYPE] = 2;
+}
+
+void __sigreturn(long long cur_ksp){
+    printf("signal returnnnnnnnnnnnnnnnnnnnnnnnnnn\n");
+
+    //require cur kernel stack pointer
+    //get cur context (should be in kernel )
+    long long cur_context = _get_current_context();
+    _switch_to_bottom(cur_context);
+
+    //schedule();
+}
 
 void system_call_handler(int esr_el1, int cur_ksp, int svc_lr){
 
@@ -266,19 +320,14 @@ void system_call_handler(int esr_el1, int cur_ksp, int svc_lr){
     int sys_no;
     asm volatile("mov %0, x8" : "=r"(sys_no));
 
-    long long img_name_addr;
-    long long ch;
-    long long mbox_addr;
-    long long buf_addr;
-    long long size;
+    long long x0, x1;
+    asm volatile("mov x1, %0" : : "r"(cur_ksp));
+    asm volatile("ldp %0, %1, [x1, 16 * 0]" : "=r"(x0), "=r"(x1));
 
-    // if( ((esr_el1 >> 26) & (0b111111)) != (0b010101)){
-    //     printf("fuck you\n");
-    //     return;
-    // }
-    // else{
-    //     printf("hi\n");
-    // }
+    if( ((esr_el1 >> 26) & (0b111111)) != (0b010101)){
+        printf("fuck you it's real exception\n");
+        return;
+    }
 
     if(svc_no == 0){
         switch(sys_no){
@@ -286,22 +335,13 @@ void system_call_handler(int esr_el1, int cur_ksp, int svc_lr){
                 __get_pid(cur_ksp);
                 break;
             case 1:
-                //load arg from trap frame
-                asm volatile("mov x1, %0" : : "r"(cur_ksp));
-                asm volatile("ldp %0, %1, [x1, 16 * 0]" : "=r"(buf_addr), "=r"(size));
-                __uartread(buf_addr, size, cur_ksp);
+                __uartread(x0, x1, cur_ksp);
                 break;
             case 2:
-                asm volatile("mov x1, %0" : : "r"(cur_ksp));
-                asm volatile("ldp %0, %1, [x1, 16 * 0]" : "=r"(buf_addr), "=r"(size));
-                __uartwrite(buf_addr, size, cur_ksp);
+                __uartwrite(x0, x1, cur_ksp);
                 break;
             case 3:
-                //asm volatile("mov %0, x9" : "=r"(img_addr));
-                //asm volatile("mov %0, x107" : "=r"(img_len));
-                asm volatile("mov x1, %0" : : "r"(cur_ksp));
-                asm volatile("ldr %0, [x1, 16 * 0]" : "=r"(img_name_addr));
-                __exec(cur_ksp, img_name_addr);
+                __exec(cur_ksp, x0);
                 break;
             case 4:
                 __fork(cur_ksp, svc_lr);
@@ -310,11 +350,16 @@ void system_call_handler(int esr_el1, int cur_ksp, int svc_lr){
                 __exit(svc_lr);
                 break;
             case 6:
-                //asm volatile("mov %0, x9" : "=r"(ch));
-                //asm volatile("mov %0, x10" : "=r"(mbox_addr));
-                asm volatile("mov x1, %0" : : "r"(cur_ksp));
-                asm volatile("ldp %0, %1, [x1, 16 * 0]" : "=r"(ch), "=r"(mbox_addr));
-                __mbox_call(cur_ksp, ch, (int *)mbox_addr);
+                __mbox_call(cur_ksp, x0, (int *)x1);
+                break;
+            case 7:
+                __kill(x0, x1);
+                break;
+            case 8:
+                __signal(x0, (void *)x1);
+                break;
+            case 9:
+                __sigreturn(cur_ksp);
                 break;
             default:
                 printf("\nException!!! SVC %d\n", svc_no);

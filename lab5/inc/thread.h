@@ -1,5 +1,9 @@
 #include "list.h"
 
+#define SIG_INT 2
+#define SIGKILL 9
+
+
 enum T_STATUS {IDLE, RUN, DEAD};
 
 typedef struct{
@@ -9,21 +13,16 @@ typedef struct{
 }Context;
 
 typedef struct{
-    int sp_usr;
-    int lr_usr;
-    int sp_svc;
-    int lr_svc;
-    int spsr;
-}Trap_Frame;
-
-typedef struct{
     Context context;
     int tid;
     enum T_STATUS status;
     void (*task)();
     char *ustack;
     char *kstack;
-    struct list_head t_list;
+    struct list_head t_list;    //for run queue
+    long long sig_types[10];    //0 : no signal, 1 : default, 2 : register
+    void (*default_sighands[10])();
+    void (*register_sighands[10])();
 }Thread;
 
 typedef struct{
@@ -41,3 +40,7 @@ void schedule();
 void idle();
 void foo();
 void fork_test();
+void check_signal();
+void default_handler_kill(Thread *this, long long SIGTYPE);
+void register_handler_kill(Thread *this, long long SIGTYPE);
+void say_hi();

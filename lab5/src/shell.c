@@ -14,6 +14,7 @@
 
 extern void _user();
 extern void _from_el1_to_el0();
+extern long long _get_current_context();
 
 void hello()
 {
@@ -216,6 +217,17 @@ void exec_interface(){
 	}
 }
 
+void test_signal(){
+	if(fork() == 0){
+		while(1){
+
+		}
+	}
+	else{
+		kill(0, SIGKILL);
+	}
+}
+
 void command_not_found(char *cmd)
 {
 	printf("\nCommand not found : %s\n", cmd);
@@ -358,6 +370,8 @@ void shell()
 		else if( strcmp(cmd, "fork") == 0)		fork_test_interface();
 		else if( strcmp(cmd, "exec") == 0)		exec_interface();
 		else if( strcmp(cmd, "ttt") == 0)		test_uart();
+		else if( strcmp(cmd, "signal") == 0)	test_signal();
+		else if( strcmp(cmd, "pid") == 0)		printf("\n%d\n", get_pid());
 		else									command_not_found(cmd);
 	}
 }

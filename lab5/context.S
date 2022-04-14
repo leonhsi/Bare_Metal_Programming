@@ -20,6 +20,18 @@ _switch_to:
     msr tpidr_el1, x1
     ret //return to lr which store task address
 
+.global _switch_to_top
+_switch_to_top:
+    stp x19, x20, [x0, 16 * 0]
+    stp x21, x22, [x0, 16 * 1]
+    stp x23, x24, [x0, 16 * 2]
+    stp x25, x26, [x0, 16 * 3]
+    stp x27, x28, [x0, 16 * 4]
+    stp fp, lr, [x0, 16 * 5]
+    mov x9, sp
+    str x9, [x0, 16 * 6]
+    ret
+
 .global _switch_to_bottom
 _switch_to_bottom:
     ldp x19, x20, [x0, 16 * 0]
