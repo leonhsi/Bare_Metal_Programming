@@ -213,7 +213,7 @@ void test_uart(){
 void exec_interface(){
 
 	if(fork() == 0){
-		exec("syscall.img");
+		exec("user.img");
 	}
 }
 

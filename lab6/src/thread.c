@@ -5,10 +5,11 @@
 #include "thread.h"
 #include "syscall.h"
 #include "shell.h"
+#include "mm.h"
 
 extern void _switch_to();
 extern void _switch_to_bottom();
-extern int _get_current_context();
+extern long long _get_current_context();
 extern void _ret_shell();
 extern void _core_timer_enable();
 extern void _switch_to_top();
@@ -17,36 +18,40 @@ void init_run_queue(){
     run_queue = (Run_Queue *)simple_malloc(sizeof(Run_Queue));
     run_queue->cur_tid = 0;
 
-    run_queue->init_thread.tid = 100;
-    run_queue->init_thread.status = IDLE;
-    run_queue->init_thread.task = (shell);
-    run_queue->init_thread.ustack = alloc_page(1);
-    run_queue->init_thread.kstack = alloc_page(1);
+    // run_queue->init_thread.tid = 100;
+    // run_queue->init_thread.status = IDLE;
+    // run_queue->init_thread.task = (shell);
+    // run_queue->init_thread.ustack = alloc_page(1);
+    // run_queue->init_thread.kstack = alloc_page(1);
 
-    run_queue->init_thread.context.sp = (long long)run_queue->init_thread.kstack;
-    run_queue->init_thread.context.lr = (long long)run_queue->init_thread.task;
+    // run_queue->init_thread.context.sp = (long long)run_queue->init_thread.kstack;
+    // run_queue->init_thread.context.lr = (long long)run_queue->init_thread.task;
 
     INIT_LIST_HEAD(&(run_queue->h_list));
 
-    asm volatile("msr tpidr_el1, %0" : : "r"(&run_queue->init_thread.context));
+    run_queue->init_thread = create_thread(0);
+
+    asm volatile("msr tpidr_el1, %0" : : "r"(&run_queue->init_thread->context));
+
+    printf("initial thread context : %x\n", run_queue->init_thread->context);
 
     //set sp
     //asm volatile("mov sp, %0" : : "r"(run_queue->init_thread.context.sp));
 
-    printf("tid : %d\n", run_queue->init_thread.tid);
-    int pid = get_pid();
-    printf("pid : %d\n", pid);
+    printf("tid : %d\n", run_queue->init_thread->tid);
+    //int pid = get_pid();
+    //printf("pid : %d\n", pid);
 }
 
 Thread* create_thread(void (*task)()){
-    Thread *t = (Thread *)simple_malloc(sizeof(Thread));
+    Thread *t = (Thread *)alloc_page(1);
     run_queue->cur_tid++;
 
     t->tid = run_queue->cur_tid;
     t->status = RUN;
     t->task = task;
-    t->ustack = alloc_page(1);
-    t->kstack = alloc_page(1);
+    t->ustack = alloc_page(1) + 0x1000;
+    t->kstack = alloc_page(1) + 0x1000;
     printf("\ncreate thread id : %d, user stack : %x, kernel stack : %x\n", t->tid, t->ustack, t->kstack);
 
     INIT_LIST_HEAD(&(t->t_list));
@@ -54,16 +59,24 @@ Thread* create_thread(void (*task)()){
     t->context.sp = (long long)t->kstack;   //used only when context switch, always in el1
     t->context.lr = (long long)task;
 
+    t->pagetable = (uint64_t)KA2PA(alloc_page(1));
+    
+    //map user stack
+    mappages(PA2KA((void *)t->pagetable), 0x0000ffffffffe000, 4096, (uint64_t)t->ustack - 0x1000, PT_AF | PT_USER | PT_MEM | PT_RW);
+
+    //map mail box
+    mappages(PA2KA((void *)t->pagetable), 0x3c100000, 0x200000, PA2KA(0x3c100000), PT_AF | PT_USER | PT_MEM | PT_RW);
+
     //add new thread to run queue
     list_add_tail(&(t->t_list), &(run_queue->h_list));
 
     //set signal flag to 0
-    for(int i=0; i<10; i++){
-        t->sig_types[i] = 0;
-    }
+    // for(int i=0; i<10; i++){
+    //     t->sig_types[i] = 0;
+    // }
 
-    //signal handler
-    t->default_sighands[SIGKILL] = default_handler_kill;
+    // //signal handler
+    // t->default_sighands[SIGKILL] = default_handler_kill;
 
     //printf("\n====create : \n");
     //print_list();
@@ -86,10 +99,10 @@ void print_list(){
 void schedule(long long init_lr){
 
     if(list_empty(&run_queue->h_list)){
-        //printf("\nRun queue empty, return to shell!\n");
+        printf("\nRun queue empty, return to shell!\n");
         printf("\r# ");
-        run_queue->init_thread.context.lr = init_lr;
-        asm volatile("mov %0, sp" : "=r"(run_queue->init_thread.context.sp));
+        run_queue->init_thread->context.lr = init_lr;
+        asm volatile("mov %0, sp" : "=r"(run_queue->init_thread->context.sp));
 
         // long long pre_context = _get_current_context();
         // long long next_context = (long long)&run_queue->init_thread.context;
@@ -98,23 +111,25 @@ void schedule(long long init_lr){
         //     _switch_to_bottom(next_context);
         // }
 
-        _switch_to(_get_current_context(), &run_queue->init_thread.context);
+        _switch_to(_get_current_context(), &run_queue->init_thread->context);
     }
 
     long long pre_context = _get_current_context(); 
-    long long next_context = (long long)&(run_queue->init_thread.context);
+    long long next_context = (long long)&(run_queue->init_thread->context);
     //printf("\n====schedule : \n");
 
+    long long pgd_addr;
     struct list_head *pos; 
     list_for_each(pos, &run_queue->h_list){
         Thread *t = container_of(pos, Thread, t_list);
 
-         //printf("lr : %x\n", t->context.lr);
+        //printf("lr : %x\n", t->context.lr);
         if(t->status == RUN){
             //printf("tid %d is runnable, switch to this thread with sp : %x\n", t->tid, t->ustack);
             //printf("addr : %x\n", t);
             list_move_tail(&t->t_list, &run_queue->h_list);
             next_context = (long long)(&(t->context));
+            pgd_addr = t->pagetable;
             // if(pre_context == next_context){
             //     //printf("same!!");
             //     asm volatile("mov lr, %0" : : "r"(t->context.lr));
@@ -141,9 +156,9 @@ void schedule(long long init_lr){
     //printf("====\n");
     //printf("\ncur pid 1: %d\n", get_pid());
 
-    _switch_to(pre_context, next_context); 
+    _switch_to(pre_context, next_context, PA2KA(pgd_addr)); 
     //printf("\ncur pid 2: %d\n", get_pid());
-    check_signal();
+    //check_signal();
 }
 
 void check_signal(){

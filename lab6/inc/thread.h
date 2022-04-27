@@ -3,7 +3,6 @@
 #define SIG_INT 2
 #define SIGKILL 9
 
-
 enum T_STATUS {IDLE, RUN, DEAD};
 
 typedef struct{
@@ -19,19 +18,24 @@ typedef struct{
     void (*task)();
     char *ustack;
     char *kstack;
+    char *code;
     struct list_head t_list;    //for run queue
     long long sig_types[10];    //0 : no signal, 1 : default, 2 : register
     void (*default_sighands[10])();
     void (*register_sighands[10])();
+    uint64_t codesize;
+    uint64_t pagetable;
 }Thread;
 
 typedef struct{
     int cur_tid;
-    Thread init_thread;
+    Thread *init_thread;
     struct list_head h_list;
 }Run_Queue;
 
 Run_Queue *run_queue;
+
+extern void to_el0(void *addr, uint64_t usp, uint64_t pagetable);
 
 void init_run_queue();
 void print_list();

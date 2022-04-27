@@ -99,7 +99,7 @@ void irq_handler(int irq_lr){
         //_timeout_message_handler();
         long long freq;
         asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
-        printf("\ntime : freq : %d\n", freq);
+        //printf("\ntime : freq : %d\n", freq);
         _set_core_timer();
         schedule(irq_lr);
 

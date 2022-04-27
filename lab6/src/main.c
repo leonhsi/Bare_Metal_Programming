@@ -9,8 +9,7 @@
 #include "irq.h"
 #include "buddy.h"
 #include "thread.h"
-#include "vm.h"
-
+#include "syscall.h"
 
 void initialize(int addr, int time){
 	
@@ -47,10 +46,12 @@ void initialize(int addr, int time){
 
 extern void _core_timer_enable();
 extern void _from_el1_to_el0();
+extern long long _get_current_context();
 
 int main(int addr, int time)
 {
 	printf("hihihi\n");
+
 	long long cur_sp;
 	asm volatile("mov %0, sp" : "=r"(cur_sp));
 	printf("\ncur sp : %x\n", cur_sp);
@@ -58,14 +59,25 @@ int main(int addr, int time)
 	initialize(addr, time);
 
 	init_run_queue();
-	asm volatile("mov sp, %0" : : "r"(run_queue->init_thread.context.sp));
-	asm volatile("msr sp_el0, %0" : : "r"((long long)run_queue->init_thread.ustack));
-	printf("\nuser stack : %x\n", (long long)run_queue->init_thread.ustack);
+
+	asm volatile("mov sp, %0" : : "r"(run_queue->init_thread->context.sp));
+	asm volatile("msr sp_el0, %0" : : "r"((long long)run_queue->init_thread->ustack));
+	printf("\nuser stack : %x\n", (long long)run_queue->init_thread->ustack);
+
     _core_timer_enable();
 
-	//_from_el1_to_el0();
+	long long cur_context;
+	asm volatile("mrs %0, tpidr_el1" : "=r"(cur_context));
+	printf("\nmain context : %lx\n", cur_context);
 
-	shell();
+	cur_context = _get_current_context();
+	printf("\ntpidr context : %lx\n", cur_context);
+
+	//shell();
+
+	sys_exec("syscall.img", 0);
+
+	//_from_el1_to_el0();
 
 	return 0;
 }

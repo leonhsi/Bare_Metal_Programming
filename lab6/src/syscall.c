@@ -6,8 +6,9 @@
 #include "initrd.h"
 #include "mbox.h"
 #include "syscall.h"
+#include "mm.h"
 
-extern int _get_current_context();
+extern long long _get_current_context();
 extern void _switch_to_bottom();
 
 //user
@@ -104,7 +105,7 @@ void sigreturn(){
 }
 
 //kernel
-void __get_pid(int sp){
+void __get_pid(long long sp){
     long long cur_context = _get_current_context();
     Thread *cur_thread = (Thread *)cur_context;
     //printf("tid : %d\n", cur_thread->tid);
@@ -135,6 +136,8 @@ void __uartread(long long buf_addr, long long size, long long cur_ksp){
 
 void __uartwrite(long long buf_addr, long long size, long long cur_ksp){
     char *buf = (char *)buf_addr;
+
+    //printf("uart write buf : %s, buf addr : %x\n", buf, buf_addr);
     
     asm volatile("msr DAIFClr, 0xf");
     uart_write(buf, size);
@@ -146,30 +149,66 @@ void __uartwrite(long long buf_addr, long long size, long long cur_ksp){
     asm volatile("str x1, [x2, 16 * 0]");
 }
 
-void __exec(int cur_ksp, long long img_name_addr){
+int sys_exec(char *filename, char *const argv[]){
+    char *img_cpio_addr = get_cpio_file(filename);
+    long long img_len = get_cpio_file_len(filename);
+
+    long long cur_context = _get_current_context();
+    printf("\ncontext : %lx\n", cur_context);
+    Thread *task = (Thread *)cur_context;
+
+    int order = 1;
+    while( img_len > 0x1000 << order){
+        order++;
+    }
+
+    task->code = alloc_page(order);
+    task->codesize = img_len;
+
+    mappages((pagetable_t)PA2KA(task->pagetable), 0, img_len,
+           (uint64_t)task->code, PT_AF | PT_USER | PT_MEM | PT_RW);
+
+    printf("\nfile %s\n", filename);
+
+    memcpy(task->code, img_cpio_addr, img_len);
+
+    //printf("hi\n");
+
+    to_el0(0, 0x0000fffffffff000, task->pagetable);
+
+    return 1;
+}
+
+void __exec(long long cur_ksp, long long img_name_addr){
+
     char *filename = (char *)img_name_addr;
     char *img_cpio_addr = get_cpio_file(filename);
     long long img_len = get_cpio_file_len(filename);
 
+    long long cur_context = _get_current_context();
+    Thread *task = (Thread *)cur_context;
+    int order = 1;
+    while( img_len > 0x1000 << order){
+        order++;
+    }
+    task->code = alloc_page(order);
+    task->codesize = img_len;
+    mappages((pagetable_t)PA2KA(task->pagetable), 0, img_len,
+           (uint64_t)task->code, PT_AF | PT_USER | PT_MEM | PT_RW);
+
     printf("\nfile %s\n", filename);
 
-    char *img_addr = alloc_page(img_len / Page_Size + 1);
-    char *img_addr_tmp = img_addr;
-    char *img_cpio_tmp = (char *)img_cpio_addr;
+    memcpy(task->code, img_cpio_addr, img_len);
 
-    for(int i=0; i<img_len; i++){
-        *img_addr_tmp = *img_cpio_tmp;
-        img_addr_tmp++;
-        img_cpio_tmp++;
-    }
+    printf("hi\n");
+
+    to_el0(0, 0x0000fffffffff000, task->pagetable);
 
     //write trap frame, set elr to img addr
-    asm volatile("mov x1, %0" : : "r"(cur_ksp));
-    asm volatile("mrs x2, spsr_el1");
-    asm volatile("mov x3, %0" : : "r"((long long)img_addr));    //elr
-    asm volatile("stp x2, x3, [x1, 16 * 16]");
-
-    //return;
+    // asm volatile("mov x1, %0" : : "r"(cur_ksp));
+    // asm volatile("mrs x2, spsr_el1");
+    // asm volatile("mov x3, %0" : : "r"((long long)img_addr));    //elr
+    // asm volatile("stp x2, x3, [x1, 16 * 16]");
 }
 
 void copy_context(Context *child, Context *parent){
@@ -188,30 +227,23 @@ void copy_context(Context *child, Context *parent){
     child->sp = parent->sp;
 }
 
-void __fork(int cur_ksp, int svc_lr){
+void __fork(long long cur_ksp, long long svc_lr){
     //create child thread
     Thread *child_thread = create_thread(0);
 
     //copy parent's user and kernel stack
     long long parent_context = _get_current_context();
     Thread *parent_thread = (Thread *)parent_context;
-
-    char *tmp_child_usp = child_thread->ustack;
-    char *tmp_parent_usp = parent_thread->ustack;
-    char *tmp_child_ksp = child_thread->kstack;
-    char *tmp_parent_ksp = parent_thread->kstack;
-    int n = Page_Size;
-    while(n--){
-        *tmp_child_usp = *tmp_parent_usp;
-        tmp_child_usp--;
-        tmp_parent_usp--;
-        *tmp_child_ksp = *tmp_parent_ksp;
-        tmp_child_ksp--;
-        tmp_parent_ksp--;
-    }
+    memcpy((void *)child_thread->ustack - 0x1000, (void *)parent_thread->ustack - 0x1000, 0x1000);
+    memcpy((void *)child_thread->kstack - 0x1000, (void *)parent_thread->kstack - 0x1000, 0x1000);
 
     //copy context
     copy_context(&child_thread->context, &parent_thread->context);
+
+    //use same code section
+    child_thread->code = parent_thread->code;
+    child_thread->codesize = parent_thread->codesize;
+    mappages((pagetable_t)PA2KA(child_thread->pagetable), 0, child_thread->codesize, (uint64_t)child_thread->code, PT_AF | PT_USER | PT_MEM | PT_RW);
 
     //set child context's sp as parent's
     long long offset = (long long)parent_thread->kstack - cur_ksp;
@@ -234,20 +266,21 @@ void __fork(int cur_ksp, int svc_lr){
     long long cur_usp, cur_child_usp;
     asm volatile("mov x1, %0" : : "r"(cur_ksp));
     asm volatile("ldr %0, [x1, 16 * 17]" : "=r"(cur_usp));
-    offset = (long long)parent_thread->ustack - cur_usp;
-    cur_child_usp = (long long)child_thread->ustack - offset;
-    asm volatile("mov x1, %0" : : "r"(child_thread->context.sp));
-    asm volatile("mov x2, %0" : : "r"(cur_child_usp));
-    asm volatile("str x2, [x1, 16 * 17]");
+
+    // offset = (long long)parent_thread->ustack - cur_usp;
+    // cur_child_usp = (long long)child_thread->ustack - offset;
+    // asm volatile("mov x1, %0" : : "r"(child_thread->context.sp));
+    // asm volatile("mov x2, %0" : : "r"(cur_child_usp));
+    // asm volatile("str x2, [x1, 16 * 17]");
 
     printf("\nfork : parent usp : %x, ksp : %x, child ups : %x, ksp : %x\n", parent_thread->ustack, parent_thread->kstack, child_thread->ustack, child_thread->kstack);
 
     //schedule
-    schedule(shell);
+    //schedule(shell);
     //printf("omgomgomg\n");
 }
 
-void __exit(int svc_lr){
+void __exit(long long svc_lr){
     long long cur_context = _get_current_context();
     Thread *cur_thread = (Thread *)cur_context;
 
@@ -316,22 +349,23 @@ void __sigreturn(long long cur_ksp){
     //schedule();
 }
 
-void system_call_handler(int esr_el1, long long cur_ksp, int svc_lr){
+void system_call_handler(long long esr_el1, long long cur_ksp, long long svc_lr){
 
-    printf("\nsys call sp : %x\n", cur_ksp);
+    //printf("\nsys call sp : %x\n", cur_ksp);
 
-    int svc_no = esr_el1 & 0xF;
-    int sys_no;
+    long long svc_no = esr_el1 & 0xF;
+    long long sys_no;
     asm volatile("mov %0, x8" : "=r"(sys_no));
 
     long long x0, x1;
     asm volatile("mov x1, %0" : : "r"(cur_ksp));
     asm volatile("ldp %0, %1, [x1, 16 * 0]" : "=r"(x0), "=r"(x1));
 
-    if( ((esr_el1 >> 26) & (0b111111)) != (0b010101)){
-        printf("fuck you it's real exception\n");
-        return;
-    }
+    // if( ((esr_el1 >> 26) & (0b111111)) != (0b010101)){
+    //     printf("fuck you it's real exception\n");
+    //     while(1){};
+    //     return;
+    // }
 
     if(svc_no == 0){
         switch(sys_no){
@@ -371,7 +405,7 @@ void system_call_handler(int esr_el1, long long cur_ksp, int svc_lr){
         }
     }
     else{
-        printf("\nException!!! SVC %d\n", svc_no);
+        //printf("\nException!!! SVC %d\n", svc_no);
     }
 
     return;

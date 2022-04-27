@@ -109,7 +109,7 @@ void schedule(long long init_lr){
 
          //printf("lr : %x\n", t->context.lr);
         if(t->status == RUN){
-            printf("tid %d is runnable, switch to this thread\n", t->tid);
+            //printf("tid %d is runnable, switch to this thread\n", t->tid);
             //printf("addr : %x\n", t);
             list_move_tail(&t->t_list, &run_queue->h_list);
             next_context = (long long)(&(t->context));

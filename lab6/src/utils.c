@@ -67,13 +67,22 @@ int memcmp(void *s1, void *s2, int n){  //n : bytes
 	return 0; //same
 }
 
-void *memcpy(void *dest, const void *src, long long len){
-	char *d = dest;
-	const char *s = src;
-	while(len--){
-		*d++ = *s++;
-	}
-	return dest;
+void *memcpy(void *d, void *s, size_t n) {
+  unsigned char *dst = (unsigned char *)d;
+  unsigned char *src = (unsigned char *)s;
+
+  for (int idx = 0; idx < n; idx++)
+    *(dst++) = *(src++);
+  return d;
+}
+
+void *memset(void *d, int v, size_t n)
+{
+    unsigned char *dst = (unsigned char *)d;
+
+    for (int idx = 0; idx < n; idx++)
+        *(dst++) = (unsigned char)v;
+    return d;
 }
 
 int strlen(char *str){

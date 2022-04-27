@@ -65,7 +65,8 @@ _start:
 
     //return to EL1
     eret 
-5:          
+
+5:
     ldr x0, = TCR_CONFIG_DEFAULT
     msr tcr_el1, x0
 
@@ -93,7 +94,6 @@ _start:
 
     mrs x2, sctlr_el1
     orr x2 , x2, 1
-    //mov x2, #1
     msr sctlr_el1, x2 // set M bit and enable MMU. cache remains disabled
     isb
 
@@ -101,7 +101,6 @@ _start:
     br  x2
 
 _boot_rest:     
-    //mov     sp, x1
 
     // clear bss
     ldr     x1, =__bss_start
@@ -119,6 +118,4 @@ _boot_rest:
   	// jump to C code, should not return
 	bl      main
     // for failsafe, halt this core too
-    b       1b
-
-
+    b       4b
