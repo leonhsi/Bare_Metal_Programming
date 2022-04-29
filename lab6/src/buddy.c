@@ -156,7 +156,7 @@ char *alloc_page(unsigned int size){
     unsigned long long offset = target_index * Page_Size;
     //printf("offset : %x\n\n", offset);
     char *page_ptr = ((char *)PAGE_MEMORY_BASE + offset);
-    printf("page allocated at %x, size %d\n", page_ptr, pow(2, target_value));
+    //printf("page allocated at %x, size %d\n", page_ptr, pow(2, target_value));
     memset(page_ptr, 0, 4096);
 
     return page_ptr;

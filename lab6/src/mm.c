@@ -15,7 +15,7 @@ pte_t *walk(pagetable_t pagetable, uint64_t va, int alloc)
         else
         {
             if (!alloc || (pagetable = (pagetable_t)alloc_page(1)) == 0) return 0;
-            printf("page table : %x\n", pagetable);
+            //printf("page table : %x\n", pagetable);
             memset(pagetable, 0, PGSIZE);
             *pte = KA2PA((uint64_t)pagetable) | PT_PAGE;    //set pte 
         }

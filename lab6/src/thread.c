@@ -52,7 +52,7 @@ Thread* create_thread(void (*task)()){
     t->task = task;
     t->ustack = alloc_page(1) + 0x1000;
     t->kstack = alloc_page(1) + 0x1000;
-    printf("\ncreate thread id : %d, user stack : %x, kernel stack : %x\n", t->tid, t->ustack, t->kstack);
+    //printf("\ncreate thread id : %d, user stack : %x, kernel stack : %x\n", t->tid, t->ustack, t->kstack);
 
     INIT_LIST_HEAD(&(t->t_list));
 
@@ -125,7 +125,9 @@ void schedule(long long init_lr){
 
         //printf("lr : %x\n", t->context.lr);
         if(t->status == RUN){
-            //printf("tid %d is runnable, switch to this thread with sp : %x\n", t->tid, t->ustack);
+            uint64_t usp;
+            asm volatile("mov %0, sp" : "=r"(usp));
+            printf("tid %d is runnable, switch to this thread with virtual sp : %x, physical sp : %x\n", t->tid, usp, KA2PA(t->ustack));
             //printf("addr : %x\n", t);
             list_move_tail(&t->t_list, &run_queue->h_list);
             next_context = (long long)(&(t->context));
@@ -275,7 +277,7 @@ void register_handler_kill(Thread *this, long long SIGTYPE){
     asm volatile("stp fp, %0, [%1, 16 * 5]" : : "r"(cur_lr), "r"(cur_context));
 
     //set lr to sigreturn()
-    asm volatile("mov lr, %0" : : "r"((long long)sigreturn));
+    //asm volatile("mov lr, %0" : : "r"((long long)sigreturn));
 
     //eret
     asm volatile("eret");

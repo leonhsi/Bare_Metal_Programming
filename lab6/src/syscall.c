@@ -234,11 +234,12 @@ void __fork(long long cur_ksp, long long svc_lr){
     //copy parent's user and kernel stack
     long long parent_context = _get_current_context();
     Thread *parent_thread = (Thread *)parent_context;
+    memcpy(child_thread, parent_thread, sizeof(uint64_t) * 10);
     memcpy((void *)child_thread->ustack - 0x1000, (void *)parent_thread->ustack - 0x1000, 0x1000);
     memcpy((void *)child_thread->kstack - 0x1000, (void *)parent_thread->kstack - 0x1000, 0x1000);
 
     //copy context
-    copy_context(&child_thread->context, &parent_thread->context);
+    //copy_context(&child_thread->context, &parent_thread->context);
 
     //use same code section
     child_thread->code = parent_thread->code;
@@ -263,21 +264,18 @@ void __fork(long long cur_ksp, long long svc_lr){
     asm volatile("mov x2, #0");
     asm volatile("str x2, [x1, 16 * 0]");
 
-    long long cur_usp, cur_child_usp;
+    long long cur_usp;
     asm volatile("mov x1, %0" : : "r"(cur_ksp));
     asm volatile("ldr %0, [x1, 16 * 17]" : "=r"(cur_usp));
 
+    // long long cur_child_usp;
     // offset = (long long)parent_thread->ustack - cur_usp;
     // cur_child_usp = (long long)child_thread->ustack - offset;
     // asm volatile("mov x1, %0" : : "r"(child_thread->context.sp));
     // asm volatile("mov x2, %0" : : "r"(cur_child_usp));
     // asm volatile("str x2, [x1, 16 * 17]");
 
-    printf("\nfork : parent usp : %x, ksp : %x, child ups : %x, ksp : %x\n", parent_thread->ustack, parent_thread->kstack, child_thread->ustack, child_thread->kstack);
-
-    //schedule
-    //schedule(shell);
-    //printf("omgomgomg\n");
+    //printf("\nfork : parent usp : %x, ksp : %x, child ups : %x, ksp : %x\n", parent_thread->ustack, parent_thread->kstack, child_thread->ustack, child_thread->kstack);
 }
 
 void __exit(long long svc_lr){
@@ -292,23 +290,14 @@ void __exit(long long svc_lr){
 }
 
 void __mbox_call(long long cur_ksp, long long ch, int* mbox){
-    long long ret = 0;
+    long long cur_context = _get_current_context();
+    Thread *t = (Thread *)cur_context;
 
-    unsigned int r = (((unsigned int)((unsigned long)mbox)&~0xF) | (ch&0xF));
-    //printf("\nr :%d\n", r);
+    unsigned int *new_mbox = (unsigned int *)((uint64_t)mbox - 0x0000ffffffffe000 + ((uint64_t)t->ustack - 0x1000));
+    //printf("\nmbox : %x\n", mbox);
+    //printf("new mbox : %x\n", new_mbox);
 
-    do{asm volatile("nop");}while(*MBOX_STATUS & MBOX_FULL);
-    *MBOX_WRITE = r;
-    while(1) {
-        /* is there a response? */
-        do{asm volatile("nop");}while(*MBOX_STATUS & MBOX_EMPTY);
-        /* is it a response to our message? */
-        if(r == *MBOX_READ){
-            /* is it a valid successful response? */
-            ret = (mbox[1]==MBOX_RESPONSE);
-            break;
-        }
-    }
+    int ret = mmbox_call(ch, new_mbox);
 
     //write trap frame
     asm volatile("mov x1, %0" : : "r"(cur_ksp));
@@ -363,7 +352,7 @@ void system_call_handler(long long esr_el1, long long cur_ksp, long long svc_lr)
 
     // if( ((esr_el1 >> 26) & (0b111111)) != (0b010101)){
     //     printf("fuck you it's real exception\n");
-    //     while(1){};
+    //     //while(1){};
     //     return;
     // }
 

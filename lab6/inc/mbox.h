@@ -36,4 +36,4 @@
 
 void get_board_revision();
 void get_arm_memory();
-int mmbox_call(unsigned char ch);
+int mmbox_call(unsigned char ch, unsigned int *mbox);

@@ -1,16 +1,17 @@
 #include "mbox.h"
 #include "uart.h"
 #include "syscall.h"
+#include "mm.h"
 
 /* mailbox message buffer */
-volatile unsigned int  __attribute__((aligned(16))) mbox[36];
+//volatile unsigned int  __attribute__((aligned(16))) mbox[36];
 
 /**
  * Make a mailbox call. Returns 0 on failure, non-zero on success
  */
-int mmbox_call(unsigned char ch)
+int mmbox_call(unsigned char ch, unsigned int *mbox)
 {
-    unsigned int r = (((unsigned int)((unsigned long)&mbox)&~0xF) | (ch&0xF));
+    unsigned int r = (((unsigned int)((unsigned long)KA2PA(mbox))&~0xF) | (ch&0xF));
     /* wait until we can write to the mailbox */
     do{asm volatile("nop");}while(*MBOX_STATUS & MBOX_FULL);
     /* write the address of our message to the mailbox with channel identifier */
@@ -29,7 +30,7 @@ int mmbox_call(unsigned char ch)
 
 void get_board_revision()
 {
-	//volatile unsigned int  __attribute__((aligned(16))) mbox[36];
+	volatile unsigned int  __attribute__((aligned(16))) mbox[36];
 	mbox[0] = 7 * 4;					//buffer size in bytes
 	mbox[1] = REQUEST_CODE;
 	
@@ -48,7 +49,7 @@ void get_board_revision()
 
 void get_arm_memory()
 {
-	//volatile unsigned int  __attribute__((aligned(16))) mbox[36];
+	volatile unsigned int  __attribute__((aligned(16))) mbox[36];
 	mbox[0] = 8 * 4;					//buffer size in bytes
 	mbox[1] = REQUEST_CODE;
 	

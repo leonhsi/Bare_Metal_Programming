@@ -73,11 +73,12 @@ int main(int addr, int time)
 	cur_context = _get_current_context();
 	printf("\ntpidr context : %lx\n", cur_context);
 
-	//shell();
+	sys_exec("syscall_lfb.img", 0);
 
-	sys_exec("syscall.img", 0);
-
+	printf("\nwait a min...\n");
 	//_from_el1_to_el0();
+
+	//shell();
 
 	return 0;
 }

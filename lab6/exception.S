@@ -213,6 +213,7 @@ _core_timer_enable:
   //x0 : timeout sec
   //set expired time
   mrs   x1, cntfrq_el0
+  lsr   x1, x1, 5
   //mul   x1, x1, x0    //x1 = freq * sec
   msr   cntp_tval_el0, x1
   //enable
