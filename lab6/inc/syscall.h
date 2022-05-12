@@ -1,6 +1,15 @@
 #ifndef SYSCALL__H
 #define SYSCALL__H
 
+/*Exception Class*/
+#define SVC_INST                0b010101    //SVC instruction execution in AArch64 state.
+#define INST_ABORT_L            0b100000    //Instruction Abort from a lower Exception level.
+#define DATA_ABORT_L            0b100100    //Data Abort from a lower Exception level.
+
+/*dfsc, ifsc*/
+#define TRANS_FAULT             0b000100
+#define PERMI_FAULT             0b001100
+
 int get_pid();
 long long uartread(char buf[], long long size);
 long long uartwrite(const char buf[], long long size);

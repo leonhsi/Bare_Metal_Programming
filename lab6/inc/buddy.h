@@ -1,3 +1,6 @@
+#ifndef BUDDY__H
+#define BUDDY__H
+
 #include "list.h"
 
 //structure for The Array
@@ -40,8 +43,8 @@ typedef struct{
 }Frame_List;
 
 //global var
-The_Array *the_array;
-Frame_List *frame_list;
+extern The_Array *the_array;
+extern Frame_List *frame_list;
 
 //functions of buddy system
 void init_page_array();
@@ -72,14 +75,13 @@ typedef struct{
 }Par_List;
 
 //global var
-Par_Array *par_array;
-Par_List *par_list;
+extern Par_Array *par_array;
+extern Par_List *par_list;
 
 //functions
 void init_dynamic_memory();
 char *allocate_dynamic_memory(int bytes);
 void free_dynamic_memory(char *addr);
-
 
 
 //startup allocator
@@ -89,4 +91,4 @@ void startup_allocator();
 void get_initrd_end(char *prop_name, unsigned int addr);
 
 
-
+#endif

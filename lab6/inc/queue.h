@@ -1,3 +1,6 @@
+#ifndef QUEUE__H
+#define QUEUE__H
+
 #define capacity 100
 
 typedef struct{
@@ -14,3 +17,5 @@ void enqueue(Queue* queue, char item);
 char dequeue(Queue* queue);
 int front(Queue* queue);
 int rear(Queue* queue);
+
+#endif

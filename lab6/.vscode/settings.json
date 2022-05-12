@@ -8,5 +8,6 @@
         "initializer_list": "c",
         "utility": "c",
         "random": "cpp"
-    }
+    },
+    "C_Cpp.errorSquiggles": "Disabled"
 }

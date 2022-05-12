@@ -153,7 +153,7 @@ _system_call_saver:
   save_all
   mrs   x0, esr_el1
   mov   x1, sp        //cur_sp, sp_el1
-  adr   x2, 2f        //svc_lr
+  adr   x2, 2f        //svc_lr 
   bl system_call_handler
 2:  load_all
   eret

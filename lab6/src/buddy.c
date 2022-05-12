@@ -3,6 +3,11 @@
 #include "buddy.h"
 #include "dtb.h"
 
+The_Array *the_array;
+Frame_List *frame_list;
+Par_Array *par_array;
+Par_List *par_list;
+
 void init_page_array(){
     the_array = (The_Array *)simple_malloc(sizeof(The_Array));
 

@@ -1,3 +1,6 @@
+#ifndef MOBX__H
+#define MBOX__H
+
 #include "gpio.h"
 
 //extern volatile unsigned int mbox[36];
@@ -37,3 +40,6 @@
 void get_board_revision();
 void get_arm_memory();
 int mmbox_call(unsigned char ch, unsigned int *mbox);
+
+
+#endif

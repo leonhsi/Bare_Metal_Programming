@@ -7,9 +7,11 @@
 #include "shell.h"
 #include "mm.h"
 
+Run_Queue *run_queue;
+
 extern void _switch_to();
 extern void _switch_to_bottom();
-extern long long _get_current_context();
+extern size_t _get_current_context();
 extern void _ret_shell();
 extern void _core_timer_enable();
 extern void _switch_to_top();
@@ -24,8 +26,8 @@ void init_run_queue(){
     // run_queue->init_thread.ustack = alloc_page(1);
     // run_queue->init_thread.kstack = alloc_page(1);
 
-    // run_queue->init_thread.context.sp = (long long)run_queue->init_thread.kstack;
-    // run_queue->init_thread.context.lr = (long long)run_queue->init_thread.task;
+    // run_queue->init_thread.context.sp = (size_t)run_queue->init_thread.kstack;
+    // run_queue->init_thread.context.lr = (size_t)run_queue->init_thread.task;
 
     INIT_LIST_HEAD(&(run_queue->h_list));
 
@@ -33,10 +35,15 @@ void init_run_queue(){
 
     asm volatile("msr tpidr_el1, %0" : : "r"(&run_queue->init_thread->context));
 
-    printf("initial thread context : %x\n", run_queue->init_thread->context);
+    printf("initial thread context : %x\n", &run_queue->init_thread->context);
 
     //set sp
-    //asm volatile("mov sp, %0" : : "r"(run_queue->init_thread.context.sp));
+    //asm volatile("mov sp, %0" : : "r"(run_queue->init_thread->context.sp));
+    run_queue->init_thread->kstack = (char *)0xFFFF000000080000;
+    run_queue->init_thread->context.sp = (size_t)run_queue->init_thread->kstack;
+    size_t initial_sp;
+    asm volatile("mov %0, sp" : "=r"(initial_sp));
+    printf("initial sp : %x\n", initial_sp);
 
     printf("tid : %d\n", run_queue->init_thread->tid);
     //int pid = get_pid();
@@ -56,16 +63,20 @@ Thread* create_thread(void (*task)()){
 
     INIT_LIST_HEAD(&(t->t_list));
 
-    t->context.sp = (long long)t->kstack;   //used only when context switch, always in el1
-    t->context.lr = (long long)task;
+    t->context.sp = (size_t)t->kstack;   //used only when context switch, always in el1
+    t->context.lr = (size_t)task;
 
     t->pagetable = (uint64_t)KA2PA(alloc_page(1));
     
     //map user stack
-    mappages(PA2KA((void *)t->pagetable), 0x0000ffffffffe000, 4096, (uint64_t)t->ustack - 0x1000, PT_AF | PT_USER | PT_MEM | PT_RW);
+    t->mm = init_mm();
+    vma_struct *vma = container_of(t->mm->vma_head.next, vma_struct, vma_list);     //first vma
+    vma->start = 0x0000ffffffffb000;
+    vma->end = 0x0000fffffffff000;
+    mappages(PA2KA((void *)t->pagetable), 0x0000ffffffffe000, 4096, (uint64_t)t->ustack - 0x1000, PT_AF | PT_USER | PT_MEM | PT_RW, t);
 
     //map mail box
-    mappages(PA2KA((void *)t->pagetable), 0x3c100000, 0x200000, PA2KA(0x3c100000), PT_AF | PT_USER | PT_MEM | PT_RW);
+    mappages(PA2KA((void *)t->pagetable), 0x3c100000, 0x200000, PA2KA(0x3c100000), PT_AF | PT_USER | PT_MEM | PT_RW, t);
 
     //add new thread to run queue
     list_add_tail(&(t->t_list), &(run_queue->h_list));
@@ -78,10 +89,7 @@ Thread* create_thread(void (*task)()){
     // //signal handler
     // t->default_sighands[SIGKILL] = default_handler_kill;
 
-    //printf("\n====create : \n");
-    //print_list();
-    //printf("====\n");
-
+    //printf("thread created\n");
     return t;
 }
 
@@ -96,7 +104,7 @@ void print_list(){
     printf("null\n");
 }
 
-void schedule(long long init_lr){
+void schedule(size_t init_lr){
 
     if(list_empty(&run_queue->h_list)){
         printf("\nRun queue empty, return to shell!\n");
@@ -104,8 +112,8 @@ void schedule(long long init_lr){
         run_queue->init_thread->context.lr = init_lr;
         asm volatile("mov %0, sp" : "=r"(run_queue->init_thread->context.sp));
 
-        // long long pre_context = _get_current_context();
-        // long long next_context = (long long)&run_queue->init_thread.context;
+        // size_t pre_context = _get_current_context();
+        // size_t next_context = (size_t)&run_queue->init_thread.context;
         // if(pre_context == next_context){
         //     printf("same!!");
         //     _switch_to_bottom(next_context);
@@ -114,11 +122,11 @@ void schedule(long long init_lr){
         _switch_to(_get_current_context(), &run_queue->init_thread->context);
     }
 
-    long long pre_context = _get_current_context(); 
-    long long next_context = (long long)&(run_queue->init_thread->context);
+    size_t pre_context = _get_current_context(); 
+    size_t next_context = (size_t)&(run_queue->init_thread->context);
     //printf("\n====schedule : \n");
 
-    long long pgd_addr;
+    size_t pgd_addr;
     struct list_head *pos; 
     list_for_each(pos, &run_queue->h_list){
         Thread *t = container_of(pos, Thread, t_list);
@@ -130,7 +138,7 @@ void schedule(long long init_lr){
             printf("tid %d is runnable, switch to this thread with virtual sp : %x, physical sp : %x\n", t->tid, usp, KA2PA(t->ustack));
             //printf("addr : %x\n", t);
             list_move_tail(&t->t_list, &run_queue->h_list);
-            next_context = (long long)(&(t->context));
+            next_context = (size_t)(&(t->context));
             pgd_addr = t->pagetable;
             // if(pre_context == next_context){
             //     //printf("same!!");
@@ -144,8 +152,8 @@ void schedule(long long init_lr){
         //     //printf("tid %d died, switch to idle(init) thread\n", t->tid);
         //     // let idle thread kill zombie
         //     run_queue->init_thread.task = (idle);
-        //     run_queue->init_thread.context.lr = (long long)run_queue->init_thread.task;
-        //     next_context = (long long)&run_queue->init_thread.context;
+        //     run_queue->init_thread.context.lr = (size_t)run_queue->init_thread.task;
+        //     next_context = (size_t)&run_queue->init_thread.context;
         //     //idle();
         //     //return;
         //     // run_queue->init_thread.context.lr = init_lr;
@@ -181,7 +189,7 @@ void check_signal(){
     }
 }
 
-void idle(long long init_lr){
+void idle(size_t init_lr){
     //printf("\n===idle\n");
     //int has_zombie = 0;
 
@@ -204,7 +212,7 @@ void idle(long long init_lr){
 }
 
 void foo(){
-    long long cur_context = _get_current_context();
+    size_t cur_context = _get_current_context();
     Thread *cur_thread = (Thread *)cur_context;
 	for(int i=0; i<10; i++){
 		printf("Thread id : %d, get_pid : %d, i : %d, status : %d\n", cur_thread->tid, get_pid(), i, cur_thread->status);
@@ -213,7 +221,7 @@ void foo(){
             //printf("set tid %d to DEAD\n", cur_thread->tid);
             cur_thread->status = DEAD;
         }
-        schedule((long long)shell);
+        schedule((size_t)shell);
 	}
     printf("\nhere\n");
 }
@@ -222,7 +230,7 @@ void fork_test(){
     printf("\nFork Test, pid %d\n", get_pid());
     int cnt = 1;
     int ret = 0;
-    long long cur_sp;
+    size_t cur_sp;
     if ((ret = fork()) == 0) { // child
         asm volatile("mov %0, sp" : "=r"(cur_sp));
         printf("first child pid: %d, cnt: %d, ptr: %x, sp : %x\n", get_pid(), cnt, &cnt, cur_sp);
@@ -247,16 +255,16 @@ void fork_test(){
     }
 }
 
-void default_handler_kill(Thread *this, long long SIGTYPE){
+void default_handler_kill(Thread *this, size_t SIGTYPE){
     printf("\ndefualt handler kill pid : %d\n", this->tid);
     this->status = DEAD;
     this->sig_types[SIGTYPE] = 0;
     return;
 }
 
-void register_handler_kill(Thread *this, long long SIGTYPE){
+void register_handler_kill(Thread *this, size_t SIGTYPE){
     //store lr to go back to check signal
-    long long cur_lr;
+    size_t cur_lr;
     asm volatile("mov %0, lr" : "=r"(cur_lr));
 
     printf("\nregister handler kill pid : %d\n", this->tid);
@@ -264,20 +272,20 @@ void register_handler_kill(Thread *this, long long SIGTYPE){
 
     //acquire new user stack, set sp_el0
     char *new_usp = alloc_page(1);
-    asm volatile("msr sp_el0, %0" : : "r"((long long)new_usp));
+    asm volatile("msr sp_el0, %0" : : "r"((size_t)new_usp));
 
     //set elr_el1 to register handler, spsr_el1 = 0
-    asm volatile("msr elr_el1, %0" : : "r"((long long)this->register_sighands[SIGTYPE]));
+    asm volatile("msr elr_el1, %0" : : "r"((size_t)this->register_sighands[SIGTYPE]));
     asm volatile("mov x1, 0x0");
     asm volatile("msr spsr_el1, x1");
 
     //store cur context
-    long long cur_context = _get_current_context();
+    size_t cur_context = _get_current_context();
     _switch_to_top(cur_context);
     asm volatile("stp fp, %0, [%1, 16 * 5]" : : "r"(cur_lr), "r"(cur_context));
 
     //set lr to sigreturn()
-    //asm volatile("mov lr, %0" : : "r"((long long)sigreturn));
+    //asm volatile("mov lr, %0" : : "r"((size_t)sigreturn));
 
     //eret
     asm volatile("eret");

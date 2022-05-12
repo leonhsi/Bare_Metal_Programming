@@ -1,3 +1,6 @@
+#ifndef UART__H
+#define UART__H
+
 /* Auxilary mini UART registers */
 #define AUX_ENABLE      ((volatile unsigned int*)(MMIO_BASE+0x00215004))
 #define AUX_MU_IO       ((volatile unsigned int*)(MMIO_BASE+0x00215040))
@@ -35,3 +38,5 @@ void uart_disable_rx_ir();
 char uart_getc_async();
 void uart_send_async(char c);
 void uart_puts_async(char *s);
+
+#endif
